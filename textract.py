@@ -1,6 +1,25 @@
 import random
 import time
 
+# --- ANSI Color Codes ---
+class Colors:
+    RESET = '\033[0m'
+    RED = '\033[91m'
+    GREEN = '\033[92m'
+    YELLOW = '\033[93m'
+    BLUE = '\033[94m'
+    MAGENTA = '\033[95m'
+    CYAN = '\033[96m'
+    WHITE = '\033[97m'
+    BRIGHT_BLACK = '\033[90m'
+    BRIGHT_RED = '\033[91m'
+    BRIGHT_GREEN = '\033[92m'
+    BRIGHT_YELLOW = '\033[93m'
+    BRIGHT_BLUE = '\033[94m'
+    BRIGHT_MAGENTA = '\033[95m'
+    BRIGHT_CYAN = '\033[96m'
+    BRIGHT_WHITE = '\033[97m'
+
 # --- Item Classes ---
 
 class Item:
@@ -18,24 +37,30 @@ class Item:
 
 class Weapon(Item):
     """Represents a weapon item."""
-    def __init__(self, name, description, damage, weapon_type="ranged", weight=2, effective_range_type="medium"):
+    def __init__(self, name, description, damage, weapon_type="ranged", weight=2, effective_range_type="medium", caliber="N/A"):
         super().__init__(name, description, weight)
-        self.damage = damage
+        self.damage = damage # Keep damage for internal calculations
         self.weapon_type = weapon_type # "melee" or "ranged"
         self.effective_range_type = effective_range_type # "very_short", "short", "medium", "long"
+        self.caliber = caliber # New: Caliber of the weapon
 
     def get_info(self):
-        return f"{super().get_info()}, Damage: {self.damage}, Type: {self.weapon_type}, Optimal Range: {self.effective_range_type.replace('_', ' ').capitalize()}"
+        # Modified to hide damage and show caliber
+        if self.weapon_type == "melee":
+            return f"{self.name}: {self.description} (Weight: {self.weight}), Type: {self.weapon_type}, Optimal Range: {self.effective_range_type.replace('_', ' ').capitalize()}"
+        else:
+            return f"{self.name}: {self.description} (Weight: {self.weight}), Type: {self.weapon_type}, Optimal Range: {self.effective_range_type.replace('_', ' ').capitalize()}, Caliber: {self.caliber}"
 
 class Armor(Item):
     """Represents an armor item."""
     def __init__(self, name, description, defense, slot="body", weight=3): # Added 'slot' attribute
         super().__init__(name, description, weight)
-        self.defense = defense
+        self.defense = defense # Keep defense for internal calculations
         self.slot = slot # "body" or "head"
 
     def get_info(self):
-        return f"{super().get_info()}, Defense: {self.defense}, Slot: {self.slot.capitalize()}"
+        # Modified to hide defense
+        return f"{self.name}: {self.description} (Weight: {self.weight}), Slot: {self.slot.capitalize()}"
 
 class Consumable(Item):
     """Represents a consumable item (e.g., medkit, food)."""
@@ -190,14 +215,38 @@ class Player(Character):
         """Restores player's stamina."""
         self.current_stamina = min(self.max_stamina, self.current_stamina + amount)
 
+    def _get_health_status(self):
+        """Returns a descriptive string of player's health status with color."""
+        health_percentage = (self.current_health / self.max_health) * 100
+        if health_percentage >= 75:
+            return f"{Colors.GREEN}Healthy{Colors.RESET}"
+        elif health_percentage >= 40:
+            return f"{Colors.YELLOW}Lightly Wounded{Colors.RESET}"
+        elif health_percentage >= 1:
+            return f"{Colors.RED}Near Death{Colors.RESET}"
+        else:
+            return f"{Colors.BRIGHT_BLACK}Deceased{Colors.RESET}"
+
+    def _get_stamina_status(self):
+        """Returns a descriptive string of player's stamina status."""
+        stamina_percentage = (self.current_stamina / self.max_stamina) * 100
+        if stamina_percentage >= 80:
+            return "Normal"
+        elif stamina_percentage >= 40:
+            return "Winded"
+        elif stamina_percentage >= 1:
+            return "Gassed"
+        else:
+            return "Exhausted"
+
     def display_stats(self):
-        """Displays player's current stats."""
+        """Displays player's current stats with descriptive health/stamina."""
         print("\n--- Your Stats ---")
-        print(f"Health: {self.current_health}/{self.max_health}")
-        print(f"Stamina: {self.current_stamina}/{self.max_stamina}")
-        print(f"Attack Damage: {self.damage} (Weapon: {self.equipped_weapon.name if self.equipped_weapon else 'None'})")
-        print(f"Body Defense: {self.equipped_armor.defense if self.equipped_armor else 'None'} (Armor: {self.equipped_armor.name if self.equipped_armor else 'None'})")
-        print(f"Head Defense: {self.equipped_helmet.defense if self.equipped_helmet else 'None'} (Helmet: {self.equipped_helmet.name if self.equipped_helmet else 'None'})")
+        print(f"Health: {self._get_health_status()}")
+        print(f"Stamina: {self._get_stamina_status()}")
+        print(f"Equipped Weapon: {self.equipped_weapon.name if self.equipped_weapon else 'None'}")
+        print(f"Equipped Body Armor: {self.equipped_armor.name if self.equipped_armor else 'None'}")
+        print(f"Equipped Helmet: {self.equipped_helmet.name if self.equipped_helmet else 'None'}")
         print(f"Inventory Weight: {self.get_current_weight()}/{self.max_inventory_weight}")
         print(f"Status: {'Bleeding' if self.is_bleeding else 'Normal'}")
         print("------------------")
@@ -368,290 +417,430 @@ class Game:
         self.game_won = False
 
     def _create_map(self):
-        """Initializes all locations and their connections."""
-        # Create locations with specific range types
-        customs_office = Location("Customs Office", "A dilapidated office building, once a customs checkpoint. Debris litters the floor.", range_type="close")
-        dormitories = Location("Dormitories", "A cluster of abandoned dorm buildings, known for close-quarters combat and valuable loot.", range_type="close")
-        factory_gate = Location("Factory Gate", "The main entrance to the old factory, heavily fortified and dangerous.", range_type="medium")
-        woods_clearing = Location("Woods Clearing", "A quiet clearing in the dense woods, offering some cover but also open to long-range threats.", range_type="long")
-        scav_camp = Location("Scav Camp", "A makeshift camp used by scavengers, often patrolled.", range_type="medium")
-        old_gas_station = Location("Old Gas Station", "A rundown gas station, a common ambush point.", range_type="close")
-        trailer_park = Location("Trailer Park", "A small, abandoned trailer park.", range_type="close")
+        """Initializes all locations and their connections for a larger map."""
+        # Define major zones and their sub-locations
+        # Customs Area
+        customs_main = Location("Customs Office - Main", "The central checkpoint, heavily damaged.", range_type="medium")
+        customs_east_wing = Location("Customs Office - East Wing", "A collapsed section of the office, dangerous debris.", range_type="close")
+        customs_west_wing = Location("Customs Office - West Wing", "Overgrown offices with broken windows.", range_type="medium")
+        customs_storage = Location("Customs Office - Storage", "Dark, dusty storage rooms, potential hidden stashes.", range_type="close")
+
+        # Dormitories Area
+        dorms_2_story = Location("Dormitories - 2 Story", "The smaller, two-story dormitory building.", range_type="close")
+        dorms_3_story = Location("Dormitories - 3 Story", "The larger, three-story dormitory building, known for intense fights.", range_type="close")
+        dorms_courtyard = Location("Dormitories - Courtyard", "The open area between the dorms, offers some cover.", range_type="medium")
+        dorms_boiler_room = Location("Dormitories - Boiler Room", "A cramped, dark boiler room beneath the dorms.", range_type="very_short")
+
+        # Factory Area
+        factory_gate_main = Location("Factory Gate - Main", "The primary entrance, heavily fortified.", range_type="medium")
+        factory_gate_guardhouse = Location("Factory Gate - Guardhouse", "A small, dilapidated guardhouse near the gate.", range_type="close")
+        factory_gate_road = Location("Factory Gate - Road", "The exposed road leading to the factory.", range_type="long")
+
+        # Woods Area
+        woods_north_clearing = Location("Woods - North Clearing", "A quiet clearing in the northern woods.", range_type="long")
+        woods_south_clearing = Location("Woods - South Clearing", "A more open clearing, less dense forest.", range_type="medium")
+        woods_sniper_rock = Location("Woods - Sniper Rock", "A large rock formation offering a vantage point.", range_type="long")
+        woods_logging_camp = Location("Woods - Logging Camp", "An abandoned logging camp with scattered machinery.", range_type="medium")
+
+        # Scav Camp Area
+        scav_camp_main = Location("Scav Camp - Main", "The central part of the scav camp, makeshift shelters.", range_type="close")
+        scav_camp_outskirts = Location("Scav Camp - Outskirts", "The less dense areas surrounding the main camp.", range_type="medium")
+
+        # Old Gas Station Area
+        old_gas_station_main = Location("Old Gas Station - Main", "The main building of the gas station.", range_type="close")
+        old_gas_station_pumps = Location("Old Gas Station - Pumps", "The area around the fuel pumps, exposed.", range_type="medium")
+
+        # Trailer Park Area
+        trailer_park_north = Location("Trailer Park - North", "The northern section of the trailer park.", range_type="close")
+        trailer_park_south = Location("Trailer Park - South", "The southern section, more dilapidated trailers.", range_type="close")
+
+        # Extraction Points
         crossroads_extract = Location("Crossroads Extract", "A designated extraction point near the crossroads.", is_extraction_point=True, range_type="medium")
-        z_b_013_extract = Location("ZB-013 Bunker", "An old military bunker, a reliable extraction point.", is_extraction_point=True, range_type="close")
-        # New Locations for a bigger map
-        construction_site = Location("Construction Site", "An unfinished building site, full of rebar and concrete. Good for cover, but easy to get lost.", range_type="close")
-        power_station = Location("Power Station", "A derelict power station. High risk, high reward area.", range_type="medium")
-        swamp = Location("Swamp", "A murky, overgrown swamp. Movement is slow, and visibility is low.", range_type="long")
-        village = Location("Village", "An abandoned village with scattered houses. Potential for hidden loot.", range_type="close")
+        z_b_013_bunker = Location("ZB-013 Bunker", "An old military bunker, a reliable extraction point.", is_extraction_point=True, range_type="close")
         rock_passage_extract = Location("Rock Passage Extract", "A narrow passage through rocks, another extraction point.", is_extraction_point=True, range_type="close")
-        # Even more locations for variety and map size
-        resort = Location("Resort", "A sprawling, abandoned health resort. High-tier loot, but extremely dangerous.", range_type="medium")
-        shoreline_road = Location("Shoreline Road", "A long, exposed road running along the coast. Few places to hide.", range_type="long")
-        lighthouse = Location("Lighthouse", "A tall lighthouse overlooking the sea. Excellent vantage point, but heavily guarded.", range_type="long")
-        military_base = Location("Military Base", "A heavily fortified military installation. Extremely dangerous, but promises rare gear.", range_type="long")
         tunnel_extract = Location("Tunnel Extract", "A dark, winding tunnel leading out of the area.", is_extraction_point=True, range_type="close")
 
+        # New Major Locations (with sub-locations)
+        # Construction Site Area
+        construction_site_crane = Location("Construction Site - Crane", "Area around the towering construction crane.", range_type="medium")
+        construction_site_foundations = Location("Construction Site - Foundations", "The muddy, rebar-filled foundations of a new building.", range_type="close")
+        construction_site_warehouse = Location("Construction Site - Warehouse", "A partially built warehouse structure.", range_type="medium")
 
-        # Add to map dictionary
-        self.map = {
-            "Customs Office": customs_office,
-            "Dormitories": dormitories,
-            "Factory Gate": factory_gate,
-            "Woods Clearing": woods_clearing,
-            "Scav Camp": scav_camp,
-            "Old Gas Station": old_gas_station,
-            "Trailer Park": trailer_park,
-            "Crossroads Extract": crossroads_extract,
-            "ZB-013 Bunker": z_b_013_extract,
-            "Construction Site": construction_site,
-            "Power Station": power_station,
-            "Swamp": swamp,
-            "Village": village,
-            "Rock Passage Extract": rock_passage_extract,
-            "Resort": resort,
-            "Shoreline Road": shoreline_road,
-            "Lighthouse": lighthouse,
-            "Military Base": military_base,
-            "Tunnel Extract": tunnel_extract,
-        }
+        # Power Station Area
+        power_station_turbine_hall = Location("Power Station - Turbine Hall", "The massive, echoing turbine hall.", range_type="medium")
+        power_station_control_room = Location("Power Station - Control Room", "A small, abandoned control room.", range_type="close")
+        power_station_cooling_towers = Location("Power Station - Cooling Towers", "The base of the massive cooling towers.", range_type="long")
 
-        # Define exits
-        customs_office.add_exit("north", dormitories)
-        customs_office.add_exit("east", factory_gate)
-        customs_office.add_exit("south", old_gas_station)
-        customs_office.add_exit("west", crossroads_extract)
-        customs_office.add_exit("southeast", construction_site)
+        # Swamp Area
+        swamp_main = Location("Swamp - Main", "The deepest part of the murky swamp.", range_type="long")
+        swamp_outskirts = Location("Swamp - Outskirts", "The edges of the swamp, less dense.", range_type="medium")
 
-        dormitories.add_exit("south", customs_office)
-        dormitories.add_exit("east", scav_camp)
-        dormitories.add_exit("northwest", village)
-        dormitories.add_exit("north", resort)
+        # Village Area
+        village_center = Location("Village - Center", "The main square of the abandoned village.", range_type="close")
+        village_houses = Location("Village - Houses", "Scattered, dilapidated houses.", range_type="close")
 
-        factory_gate.add_exit("west", customs_office)
-        factory_gate.add_exit("north", scav_camp)
-        factory_gate.add_exit("east", power_station)
-        factory_gate.add_exit("south", shoreline_road)
+        # Resort Area
+        resort_east_wing = Location("Resort - East Wing", "The opulent but decaying east wing of the resort.", range_type="close")
+        resort_west_wing = Location("Resort - West Wing", "The equally grand but dangerous west wing.", range_type="close")
+        resort_admin_building = Location("Resort - Admin Building", "The central administration building.", range_type="medium")
+        resort_pool_area = Location("Resort - Pool Area", "A derelict outdoor pool area.", range_type="medium")
 
-        woods_clearing.add_exit("south", trailer_park)
-        woods_clearing.add_exit("east", scav_camp)
-        woods_clearing.add_exit("northwest", z_b_013_extract)
-        woods_clearing.add_exit("north", swamp)
-        woods_clearing.add_exit("northeast", lighthouse)
+        # Shoreline Road Area
+        shoreline_north_road = Location("Shoreline Road - North", "The northern stretch of the coastal road.", range_type="long")
+        shoreline_south_road = Location("Shoreline Road - South", "The southern, more winding part of the road.", range_type="long")
+        shoreline_bus_station = Location("Shoreline Road - Bus Station", "An abandoned bus stop along the road.", range_type="medium")
 
-        scav_camp.add_exit("west", dormitories)
-        scav_camp.add_exit("south", factory_gate)
-        scav_camp.add_exit("north", woods_clearing)
-        scav_camp.add_exit("east", power_station)
+        # Lighthouse Area
+        lighthouse_base = Location("Lighthouse - Base", "The rocky base of the lighthouse.", range_type="medium")
+        lighthouse_summit = Location("Lighthouse - Summit", "The top of the lighthouse, commanding views.", range_type="long")
+        lighthouse_pier = Location("Lighthouse - Pier", "A small, broken pier extending into the water.", range_type="medium")
 
-        old_gas_station.add_exit("north", customs_office)
-        old_gas_station.add_exit("east", trailer_park)
-        old_gas_station.add_exit("south", construction_site)
-        old_gas_station.add_exit("southwest", shoreline_road)
-
-        trailer_park.add_exit("west", old_gas_station)
-        trailer_park.add_exit("north", woods_clearing)
-        trailer_park.add_exit("southwest", swamp)
-        trailer_park.add_exit("south", military_base)
-
-        crossroads_extract.add_exit("east", customs_office)
-
-        z_b_013_extract.add_exit("southeast", woods_clearing)
-
-        # New Location Exits
-        construction_site.add_exit("northwest", customs_office)
-        construction_site.add_exit("north", old_gas_station)
-        construction_site.add_exit("east", power_station)
-        construction_site.add_exit("south", rock_passage_extract)
-        construction_site.add_exit("west", shoreline_road)
-
-        power_station.add_exit("west", factory_gate)
-        power_station.add_exit("southwest", construction_site)
-        power_station.add_exit("west", scav_camp)
-        power_station.add_exit("north", village)
-        power_station.add_exit("east", lighthouse)
-
-        swamp.add_exit("south", woods_clearing)
-        swamp.add_exit("northeast", village)
-        swamp.add_exit("east", trailer_park)
-        swamp.add_exit("west", military_base)
-
-        village.add_exit("south", dormitories)
-        village.add_exit("southwest", power_station)
-        village.add_exit("south", swamp)
-        village.add_exit("east", resort)
-
-        rock_passage_extract.add_exit("north", construction_site)
-
-        resort.add_exit("south", dormitories)
-        resort.add_exit("west", village)
-        resort.add_exit("east", lighthouse)
-        resort.add_exit("north", tunnel_extract)
-
-        shoreline_road.add_exit("north", factory_gate)
-        shoreline_road.add_exit("northeast", old_gas_station)
-        shoreline_road.add_exit("east", construction_site)
-        shoreline_road.add_exit("south", military_base)
-
-        lighthouse.add_exit("southwest", woods_clearing)
-        lighthouse.add_exit("west", resort)
-        lighthouse.add_exit("south", power_station)
-
-        military_base.add_exit("north", trailer_park)
-        military_base.add_exit("east", shoreline_road)
-        military_base.add_exit("northeast", swamp)
-        military_base.add_exit("south", tunnel_extract)
-
-        tunnel_extract.add_exit("south", resort)
-        tunnel_extract.add_exit("north", military_base)
+        # Military Base Area
+        military_base_barracks = Location("Military Base - Barracks", "Dilapidated barracks buildings.", range_type="close")
+        military_base_main_gate = Location("Military Base - Main Gate", "The heavily fortified main gate.", range_type="medium")
+        military_base_bunker_complex = Location("Military Base - Bunker Complex", "An underground bunker network.", range_type="close")
+        military_base_heli_crash = Location("Military Base - Heli Crash", "The site of a downed helicopter.", range_type="medium")
 
 
-        self.current_location = customs_office # Starting location
+        # Add all locations to map dictionary
+        self.map = {loc.name: loc for loc in [
+            customs_main, customs_east_wing, customs_west_wing, customs_storage,
+            dorms_2_story, dorms_3_story, dorms_courtyard, dorms_boiler_room,
+            factory_gate_main, factory_gate_guardhouse, factory_gate_road,
+            woods_north_clearing, woods_south_clearing, woods_sniper_rock, woods_logging_camp,
+            scav_camp_main, scav_camp_outskirts,
+            old_gas_station_main, old_gas_station_pumps,
+            trailer_park_north, trailer_park_south,
+            crossroads_extract, z_b_013_bunker, rock_passage_extract, tunnel_extract,
+            construction_site_crane, construction_site_foundations, construction_site_warehouse,
+            power_station_turbine_hall, power_station_control_room, power_station_cooling_towers,
+            swamp_main, swamp_outskirts,
+            village_center, village_houses,
+            resort_east_wing, resort_west_wing, resort_admin_building, resort_pool_area,
+            shoreline_north_road, shoreline_south_road, shoreline_bus_station,
+            lighthouse_base, lighthouse_summit, lighthouse_pier,
+            military_base_barracks, military_base_main_gate, military_base_bunker_complex, military_base_heli_crash
+        ]}
+
+        # Define exits - creating a more interconnected web
+        # Customs connections
+        customs_main.add_exit("north", dorms_courtyard)
+        customs_main.add_exit("east", factory_gate_main)
+        customs_main.add_exit("south", old_gas_station_main)
+        customs_main.add_exit("west", crossroads_extract)
+        customs_main.add_exit("northeast", customs_east_wing)
+        customs_main.add_exit("northwest", customs_west_wing)
+        customs_east_wing.add_exit("west", customs_main)
+        customs_east_wing.add_exit("south", customs_storage)
+        customs_west_wing.add_exit("east", customs_main)
+        customs_west_wing.add_exit("southwest", old_gas_station_main)
+        customs_storage.add_exit("north", customs_east_wing)
+        customs_storage.add_exit("west", customs_main)
+
+        # Dormitories connections
+        dorms_2_story.add_exit("south", dorms_courtyard)
+        dorms_2_story.add_exit("east", dorms_3_story)
+        dorms_3_story.add_exit("west", dorms_2_story)
+        dorms_3_story.add_exit("south", dorms_courtyard)
+        dorms_3_story.add_exit("north", resort_east_wing) # Connect to Resort
+        dorms_courtyard.add_exit("north", dorms_2_story)
+        dorms_courtyard.add_exit("northeast", dorms_3_story)
+        dorms_courtyard.add_exit("south", customs_main)
+        dorms_courtyard.add_exit("east", scav_camp_main)
+        dorms_courtyard.add_exit("west", village_center)
+        dorms_boiler_room.add_exit("north", dorms_2_story) # Connect to one of the dorms
+
+        # Factory Gate connections
+        factory_gate_main.add_exit("west", customs_main)
+        factory_gate_main.add_exit("north", scav_camp_main)
+        factory_gate_main.add_exit("east", factory_gate_road)
+        factory_gate_main.add_exit("south", shoreline_north_road)
+        factory_gate_main.add_exit("northwest", factory_gate_guardhouse)
+        factory_gate_guardhouse.add_exit("southeast", factory_gate_main)
+        factory_gate_road.add_exit("west", factory_gate_main)
+        factory_gate_road.add_exit("east", power_station_turbine_hall)
+
+        # Woods connections
+        woods_north_clearing.add_exit("south", woods_south_clearing)
+        woods_north_clearing.add_exit("east", scav_camp_outskirts)
+        woods_north_clearing.add_exit("northwest", z_b_013_bunker)
+        woods_north_clearing.add_exit("northeast", lighthouse_base)
+        woods_north_clearing.add_exit("west", woods_logging_camp)
+        woods_south_clearing.add_exit("north", woods_north_clearing)
+        woods_south_clearing.add_exit("east", scav_camp_main)
+        woods_south_clearing.add_exit("south", trailer_park_north)
+        woods_sniper_rock.add_exit("south", woods_north_clearing) # Sniper rock overlooks north clearing
+        woods_logging_camp.add_exit("east", woods_north_clearing)
+        woods_logging_camp.add_exit("south", swamp_outskirts)
+
+        # Scav Camp connections
+        scav_camp_main.add_exit("west", dorms_courtyard)
+        scav_camp_main.add_exit("south", factory_gate_main)
+        scav_camp_main.add_exit("north", woods_south_clearing)
+        scav_camp_main.add_exit("east", scav_camp_outskirts)
+        scav_camp_outskirts.add_exit("west", scav_camp_main)
+        scav_camp_outskirts.add_exit("north", woods_north_clearing)
+        scav_camp_outskirts.add_exit("east", power_station_control_room)
+
+        # Old Gas Station connections
+        old_gas_station_main.add_exit("north", customs_main)
+        old_gas_station_main.add_exit("east", trailer_park_north)
+        old_gas_station_main.add_exit("south", construction_site_foundations)
+        old_gas_station_main.add_exit("west", shoreline_bus_station)
+        old_gas_station_main.add_exit("northwest", old_gas_station_pumps)
+        old_gas_station_pumps.add_exit("southeast", old_gas_station_main)
+
+        # Trailer Park connections
+        trailer_park_north.add_exit("west", old_gas_station_main)
+        trailer_park_north.add_exit("north", woods_south_clearing)
+        trailer_park_north.add_exit("south", trailer_park_south)
+        trailer_park_north.add_exit("east", swamp_outskirts)
+        trailer_park_south.add_exit("north", trailer_park_north)
+        trailer_park_south.add_exit("south", military_base_barracks)
+
+        # Extraction connections
+        crossroads_extract.add_exit("east", customs_main)
+        z_b_013_bunker.add_exit("southeast", woods_north_clearing)
+        rock_passage_extract.add_exit("north", construction_site_foundations)
+        tunnel_extract.add_exit("south", resort_admin_building)
+        tunnel_extract.add_exit("north", military_base_main_gate)
+
+        # Construction Site connections
+        construction_site_crane.add_exit("south", construction_site_foundations)
+        construction_site_crane.add_exit("east", power_station_turbine_hall)
+        construction_site_foundations.add_exit("north", construction_site_crane)
+        construction_site_foundations.add_exit("northwest", old_gas_station_main)
+        construction_site_foundations.add_exit("east", construction_site_warehouse)
+        construction_site_foundations.add_exit("south", rock_passage_extract)
+        construction_site_warehouse.add_exit("west", construction_site_foundations)
+        construction_site_warehouse.add_exit("north", power_station_control_room)
+
+        # Power Station connections
+        power_station_turbine_hall.add_exit("west", factory_gate_road)
+        power_station_turbine_hall.add_exit("south", construction_site_crane)
+        power_station_turbine_hall.add_exit("north", power_station_control_room)
+        power_station_turbine_hall.add_exit("east", power_station_cooling_towers)
+        power_station_control_room.add_exit("south", power_station_turbine_hall)
+        power_station_control_room.add_exit("west", scav_camp_outskirts)
+        power_station_control_room.add_exit("north", village_center)
+        power_station_cooling_towers.add_exit("west", power_station_turbine_hall)
+        power_station_cooling_towers.add_exit("north", lighthouse_base)
+
+        # Swamp connections
+        swamp_main.add_exit("south", woods_logging_camp)
+        swamp_main.add_exit("northeast", village_center)
+        swamp_main.add_exit("east", swamp_outskirts)
+        swamp_outskirts.add_exit("west", swamp_main)
+        swamp_outskirts.add_exit("north", trailer_park_north)
+        swamp_outskirts.add_exit("south", military_base_barracks)
+
+        # Village connections
+        village_center.add_exit("south", dorms_courtyard)
+        village_center.add_exit("southwest", power_station_control_room)
+        village_center.add_exit("southeast", swamp_main)
+        village_center.add_exit("east", village_houses)
+        village_center.add_exit("north", resort_west_wing)
+        village_houses.add_exit("west", village_center)
+
+        # Resort connections
+        resort_east_wing.add_exit("west", resort_admin_building)
+        resort_east_wing.add_exit("south", dorms_3_story)
+        resort_west_wing.add_exit("east", resort_admin_building)
+        resort_west_wing.add_exit("south", village_center)
+        resort_admin_building.add_exit("east", resort_east_wing)
+        resort_admin_building.add_exit("west", resort_west_wing)
+        resort_admin_building.add_exit("north", tunnel_extract)
+        resort_admin_building.add_exit("south", resort_pool_area)
+        resort_pool_area.add_exit("north", resort_admin_building)
+        resort_pool_area.add_exit("east", lighthouse_pier)
+        resort_pool_area.add_exit("west", shoreline_north_road)
+
+        # Shoreline Road connections
+        shoreline_north_road.add_exit("north", factory_gate_main)
+        shoreline_north_road.add_exit("east", resort_pool_area)
+        shoreline_north_road.add_exit("south", shoreline_south_road)
+        shoreline_north_road.add_exit("west", shoreline_bus_station)
+        shoreline_south_road.add_exit("north", shoreline_north_road)
+        shoreline_south_road.add_exit("east", construction_site_foundations)
+        shoreline_south_road.add_exit("south", military_base_main_gate)
+        shoreline_bus_station.add_exit("east", shoreline_north_road)
+        shoreline_bus_station.add_exit("north", old_gas_station_main)
+
+        # Lighthouse connections
+        lighthouse_base.add_exit("southwest", woods_north_clearing)
+        lighthouse_base.add_exit("west", power_station_cooling_towers)
+        lighthouse_base.add_exit("north", lighthouse_summit)
+        lighthouse_base.add_exit("east", lighthouse_pier)
+        lighthouse_summit.add_exit("south", lighthouse_base)
+        lighthouse_pier.add_exit("west", lighthouse_base)
+        lighthouse_pier.add_exit("north", resort_pool_area)
+
+        # Military Base connections
+        military_base_barracks.add_exit("north", trailer_park_south)
+        military_base_barracks.add_exit("east", military_base_main_gate)
+        military_base_barracks.add_exit("northeast", swamp_outskirts)
+        military_base_main_gate.add_exit("west", military_base_barracks)
+        military_base_main_gate.add_exit("north", shoreline_south_road)
+        military_base_main_gate.add_exit("south", military_base_bunker_complex)
+        military_base_main_gate.add_exit("east", military_base_heli_crash)
+        military_base_bunker_complex.add_exit("north", military_base_main_gate)
+        military_base_bunker_complex.add_exit("south", tunnel_extract)
+        military_base_heli_crash.add_exit("west", military_base_main_gate)
+
+
+        self.current_location = customs_main # Starting location
 
     def _initialize_game_state(self):
         """Sets up initial items and enemies in the world."""
-        # Define some common items
-        pistol = Weapon("Makarov PM", "A basic 9x18mm pistol.", damage=15, weight=1.5, effective_range_type="short")
-        ak74n = Weapon("AK-74N", "A reliable 5.45x39mm assault rifle.", damage=30, weight=4, effective_range_type="medium")
-        shotgun = Weapon("MP-153", "A powerful 12-gauge shotgun.", damage=40, weight=3.5, effective_range_type="very_short")
-        knife = Weapon("Combat Knife", "A sharp knife for close quarters.", damage=10, weapon_type="melee", weight=0.5, effective_range_type="very_short")
-        mosin = Weapon("Mosin", "A bolt-action rifle, slow but powerful.", damage=50, weight=6, effective_range_type="long")
-        mp5 = Weapon("MP5", "A fast-firing submachine gun.", damage=25, weight=3, effective_range_type="short")
-        # New Weapons
-        akm = Weapon("AKM", "A powerful 7.62x39mm assault rifle.", damage=35, weight=4.5, effective_range_type="medium")
-        m4a1 = Weapon("M4A1", "A high-tech 5.56x45mm assault rifle.", damage=32, weight=3.8, effective_range_type="medium")
-        svd = Weapon("SVD", "A long-range designated marksman rifle.", damage=60, weight=7, effective_range_type="long")
+        # Define all items as attributes of 'self' for global accessibility
+        self.pistol = Weapon("Makarov PM", "A common sidearm, reliable in close quarters.", damage=15, weight=1.5, effective_range_type="short", caliber="9x18mm Makarov")
+        self.ak74n = Weapon("AK-74N", "A standard-issue assault rifle, known for its versatility.", damage=30, weight=4, effective_range_type="medium", caliber="5.45x39mm")
+        self.shotgun = Weapon("MP-153", "A devastating shotgun, effective at very close range.", damage=40, weight=3.5, effective_range_type="very_short", caliber="12 gauge")
+        self.knife = Weapon("Combat Knife", "A simple, sharp blade for desperate situations.", damage=10, weapon_type="melee", weight=0.5, effective_range_type="very_short", caliber="N/A")
+        self.mosin = Weapon("Mosin", "A vintage bolt-action rifle, capable of long-range precision.", damage=50, weight=6, effective_range_type="long", caliber="7.62x54mmR")
+        self.mp5 = Weapon("MP5", "A compact submachine gun with a high rate of fire.", damage=25, weight=3, effective_range_type="short", caliber="9x19mm Parabellum")
+        self.akm = Weapon("AKM", "A robust assault rifle, favored for its stopping power.", damage=35, weight=4.5, effective_range_type="medium", caliber="7.62x39mm")
+        self.m4a1 = Weapon("M4A1", "A modern assault rifle, highly customizable and accurate.", damage=32, weight=3.8, effective_range_type="medium", caliber="5.56x45mm NATO")
+        self.svd = Weapon("SVD", "A powerful designated marksman rifle, ideal for long-distance engagements.", damage=60, weight=7, effective_range_type="long", caliber="7.62x54mmR")
+        self.toz_106 = Weapon("TOZ-106", "A sawed-off shotgun, highly lethal up close but limited range.", damage=35, weight=2, effective_range_type="very_short", caliber="12 gauge")
+        self.vpo_209 = Weapon("VPO-209", "A civilian hunting rifle, decent power and range.", damage=28, weight=3.5, effective_range_type="medium", caliber=".366 TKM")
+        self.tt_pistol = Weapon("TT Pistol", "An old but reliable semi-automatic pistol.", damage=18, weight=1, effective_range_type="short", caliber="7.62x25mm TT")
+        self.pm_silenced = Weapon("PM (Silenced)", "A Makarov pistol with a crude suppressor.", damage=16, weight=1.8, effective_range_type="short", caliber="9x18mm Makarov")
 
-        paca_armor = Armor("PACA Body Armor", "Basic soft armor vest.", defense=5, slot="body", weight=5)
-        kirasa_armor = Armor("Kirasa Armor", "Medium-grade body armor.", defense=10, slot="body", weight=8)
-        gen4_armor = Armor("Gen4 Armor", "Heavy-duty modular armor.", defense=15, slot="body", weight=12)
-        # New Helmets
-        ssh68_helmet = Armor("SSh-68 Helmet", "A basic steel helmet.", defense=3, slot="head", weight=2)
-        kolpak_helmet = Armor("Kolpak-1 Helmet", "A simple protective helmet.", defense=5, slot="head", weight=3)
-        altyn_helmet = Armor("Altyn Helmet", "Heavy-duty titanium helmet with faceshield.", defense=12, slot="head", weight=7)
+        self.paca_armor = Armor("PACA Body Armor", "Basic soft armor vest.", defense=5, slot="body", weight=5)
+        self.kirasa_armor = Armor("Kirasa Armor", "Medium-grade body armor.", defense=10, slot="body", weight=8)
+        self.gen4_armor = Armor("Gen4 Armor", "Heavy-duty modular armor.", defense=15, slot="body", weight=12)
+        self.ssh68_helmet = Armor("SSh-68 Helmet", "A basic steel helmet.", defense=3, slot="head", weight=2)
+        self.kolpak_helmet = Armor("Kolpak-1 Helmet", "A simple protective helmet.", defense=5, slot="head", weight=3)
+        self.altyn_helmet = Armor("Altyn Helmet", "Heavy-duty titanium helmet with faceshield.", defense=12, slot="head", weight=7)
+        self.tarbank_armor = Armor("Tarbank Armor", "Light civilian body armor.", defense=4, slot="body", weight=4)
+        self.un_helmet = Armor("UN Helmet", "A simple, light-duty helmet.", defense=2, slot="head", weight=1.5)
+        self.beanie = Armor("Beanie", "A knitted hat. Offers no protection.", defense=0, slot="head", weight=0.1)
 
-        medkit = Consumable("AI-2 Medkit", "A basic medical kit.", effect_type="heal", effect_value=50, weight=0.5)
-        painkillers = Consumable("Painkillers", "Reduces pain, restores some stamina.", effect_type="stamina_restore", effect_value=30, weight=0.2)
-        water_bottle = Consumable("Water Bottle", "Quenches thirst.", effect_type="stamina_restore", effect_value=20, weight=0.3)
-        # Changed bandage effect_type to cure_bleeding
-        bandage = Consumable("Bandage", "Stops light bleeding.", effect_type="cure_bleeding", effect_value=0, weight=0.1)
-        esmarch = Consumable("Esmarch Tourniquet", "Stops heavy bleeding.", effect_type="cure_bleeding", effect_value=0, weight=0.1)
-        # New Consumables
-        grizzly_medkit = Consumable("Grizzly Medkit", "A comprehensive medical kit.", effect_type="heal", effect_value=100, weight=1.5)
-        energy_drink = Consumable("Energy Drink", "Boosts stamina significantly.", effect_type="stamina_restore", effect_value=50, weight=0.3)
+        self.medkit = Consumable("AI-2 Medkit", "A basic medical kit.", effect_type="heal", effect_value=50, weight=0.5)
+        self.painkillers = Consumable("Painkillers", "Reduces pain, restores some stamina.", effect_type="stamina_restore", effect_value=30, weight=0.2)
+        self.water_bottle = Consumable("Water Bottle", "Quenches thirst.", effect_type="stamina_restore", effect_value=20, weight=0.3)
+        self.bandage = Consumable("Bandage", "Stops light bleeding.", effect_type="cure_bleeding", effect_value=0, weight=0.1)
+        self.esmarch = Consumable("Esmarch Tourniquet", "Stops heavy bleeding.", effect_type="cure_bleeding", effect_value=0, weight=0.1)
+        self.grizzly_medkit = Consumable("Grizzly Medkit", "A comprehensive medical kit.", effect_type="heal", effect_value=100, weight=1.5)
+        self.energy_drink = Consumable("Energy Drink", "Boosts stamina significantly.", effect_type="stamina_restore", effect_value=50, weight=0.3)
+        self.alyonka_chocolate = Consumable("Alyonka Chocolate", "A sweet treat, provides a small stamina boost.", effect_type="stamina_restore", effect_value=15, weight=0.1)
+        self.can_of_sprats = Consumable("Can of Sprats", "A small can of fish, provides minor healing.", effect_type="heal", effect_value=10, weight=0.2)
+        self.bolts = Item("Bolts", "A handful of rusty metal bolts.", weight=0.1)
+        self.nuts = Item("Nuts", "Various metal nuts.", weight=0.1)
+        self.spark_plug = Item("Spark Plug", "A small engine part.", weight=0.1)
+        self.wires = Item("Wires", "A coil of electrical wires.", weight=0.2)
+        self.ammunition = Item("Ammunition", "5.45x39mm rounds.", weight=0.3)
+        self.valuable_item = Item("Valuable Item", "A rare and valuable trinket.", weight=0.5)
+        self.morphine = Consumable("Morphine", "Strong painkiller.", effect_type="stamina_restore", effect_value=40, weight=0.1)
+        self.grenade = Item("Grenade", "A fragmentation grenade.", weight=0.4)
+        self.gold_chain = Item("Gold Chain", "A valuable gold chain.", weight=0.1)
+        self.wrench = Item("Wrench", "A rusty wrench.", weight=1)
+        self.matches = Item("Matches", "A box of matches.", weight=0.1)
+        self.chocolate_bar = Consumable("Chocolate Bar", "A sugary treat.", effect_type="stamina_restore", effect_value=10, weight=0.1)
+        self.mre = Consumable("MRE", "Meal Ready-to-Eat.", effect_type="heal", effect_value=30, weight=0.8)
+        self.lighter = Item("Lighter", "A simple disposable lighter.", weight=0.05)
+        self.broken_lcd = Item("Broken LCD", "A shattered LCD screen.", weight=0.2)
+        self.keycard = Item("Keycard", "A valuable keycard.", weight=0.05)
+        self.screwdriver = Item("Screwdriver", "A common tool.", weight=0.3)
+
 
         # --- BEAR PMC Starting Equipment ---
-        # More competitive starting gear for a BEAR PMC
-        self.player.add_item(akm) # Start with an AKM
-        self.player.equip_weapon(akm)
-        self.player.add_item(kirasa_armor) # Start with Kirasa armor
-        self.player.equip_armor(kirasa_armor)
-        self.player.add_item(kolpak_helmet) # Start with Kolpak helmet
-        self.player.equip_armor(kolpak_helmet)
-        self.player.add_item(medkit)
-        self.player.add_item(medkit) # Two medkits
-        self.player.add_item(bandage)
-        self.player.add_item(esmarch) # Start with an Esmarch for bleeding
-        self.player.add_item(painkillers) # Start with painkillers
+        self.player.add_item(self.akm)
+        self.player.equip_weapon(self.akm)
+        self.player.add_item(self.kirasa_armor)
+        self.player.equip_armor(self.kirasa_armor)
+        self.player.add_item(self.kolpak_helmet)
+        self.player.equip_armor(self.kolpak_helmet)
+        self.player.add_item(self.medkit)
+        self.player.add_item(self.medkit)
+        self.player.add_item(self.bandage)
+        self.player.add_item(self.esmarch)
+        self.player.add_item(self.painkillers)
 
 
-        # Place some static loot
-        self.map["Dormitories"].add_item(ak74n)
-        self.map["Dormitories"].add_item(medkit)
-        self.map["Factory Gate"].add_item(shotgun)
-        self.map["Scav Camp"].add_item(paca_armor)
-        self.map["Old Gas Station"].add_item(painkillers)
-        self.map["Woods Clearing"].add_item(water_bottle)
-        self.map["Trailer Park"].add_item(kirasa_armor)
-        self.map["Construction Site"].add_item(mosin)
-        self.map["Power Station"].add_item(gen4_armor)
-        self.map["Village"].add_item(mp5)
-        self.map["Swamp"].add_item(esmarch)
-        # New static loot locations
-        self.map["Resort"].add_item(m4a1)
-        self.map["Resort"].add_item(altyn_helmet)
-        self.map["Military Base"].add_item(svd)
-        self.map["Military Base"].add_item(grizzly_medkit)
-        self.map["Lighthouse"].add_item(akm)
-        self.map["Shoreline Road"].add_item(kolpak_helmet)
-        self.map["Shoreline Road"].add_item(energy_drink)
+        # Place some static loot in various sub-locations
+        self.map["Dormitories - 2 Story"].add_item(self.ak74n)
+        self.map["Dormitories - 3 Story"].add_item(self.medkit)
+        self.map["Factory Gate - Guardhouse"].add_item(self.shotgun)
+        self.map["Scav Camp - Main"].add_item(self.paca_armor)
+        self.map["Old Gas Station - Main"].add_item(self.painkillers)
+        self.map["Woods - North Clearing"].add_item(self.water_bottle)
+        self.map["Trailer Park - North"].add_item(self.kirasa_armor)
+        self.map["Construction Site - Foundations"].add_item(self.mosin)
+        self.map["Power Station - Turbine Hall"].add_item(self.gen4_armor)
+        self.map["Village - Center"].add_item(self.mp5)
+        self.map["Swamp - Main"].add_item(self.esmarch)
+        self.map["Resort - East Wing"].add_item(self.m4a1)
+        self.map["Resort - West Wing"].add_item(self.altyn_helmet)
+        self.map["Military Base - Bunker Complex"].add_item(self.svd)
+        self.map["Military Base - Heli Crash"].add_item(self.grizzly_medkit)
+        self.map["Lighthouse - Summit"].add_item(self.akm)
+        self.map["Shoreline Road - South"].add_item(self.kolpak_helmet)
+        self.map["Shoreline Road - Bus Station"].add_item(self.energy_drink)
 
 
-        # Add containers with loot
-        self.map["Dormitories"].add_container(Container("Duffle Bag", "A worn-out duffle bag.", items=[painkillers, Item("Spark Plug", "A small engine part.", weight=0.1)]))
-        self.map["Factory Gate"].add_container(Container("Wooden Crate", "A sturdy wooden crate, probably used for shipping.", items=[bandage, Item("Wires", "A coil of electrical wires.", weight=0.2)]))
-        self.map["Power Station"].add_container(Container("Weapon Box", "A military-grade weapon box.", items=[ak74n, Item("Ammunition", "5.45x39mm rounds.", weight=0.3)]))
-        self.map["Village"].add_container(Container("Shed Stash", "A hidden stash in an old shed.", items=[medkit, Item("Valuable Item", "A rare and valuable trinket.", weight=0.5)]))
-        # New containers
-        self.map["Resort"].add_container(Container("Medical Bag", "A large medical bag.", items=[grizzly_medkit, esmarch, Consumable("Morphine", "Strong painkiller.", effect_type="stamina_restore", effect_value=40, weight=0.1)]))
-        self.map["Military Base"].add_container(Container("Weapon Crate", "A sealed military weapon crate.", items=[m4a1, svd, Item("Grenade", "A fragmentation grenade.", weight=0.4)]))
-        self.map["Lighthouse"].add_container(Container("Supply Cache", "A small, waterproof supply cache.", items=[akm, Item("Gold Chain", "A valuable gold chain.", weight=0.1)]))
+        # Add containers with loot in various sub-locations
+        self.map["Dormitories - 2 Story"].add_container(Container("Duffle Bag", "A worn-out duffle bag.", items=[self.painkillers, self.spark_plug]))
+        self.map["Factory Gate - Main"].add_container(Container("Wooden Crate", "A sturdy wooden crate, probably used for shipping.", items=[self.bandage, self.wires]))
+        self.map["Power Station - Control Room"].add_container(Container("Weapon Box", "A military-grade weapon box.", items=[self.ak74n, self.ammunition]))
+        self.map["Village - Houses"].add_container(Container("Shed Stash", "A hidden stash in an old shed.", items=[self.medkit, self.valuable_item]))
+        self.map["Resort - Admin Building"].add_container(Container("Medical Bag", "A large medical bag.", items=[self.grizzly_medkit, self.esmarch, self.morphine]))
+        self.map["Military Base - Barracks"].add_container(Container("Weapon Crate", "A sealed military weapon crate.", items=[self.m4a1, self.svd, self.grenade]))
+        self.map["Lighthouse - Base"].add_container(Container("Supply Cache", "A small, waterproof supply cache.", items=[self.akm, self.gold_chain]))
+        self.map["Customs Office - Storage"].add_container(Container("Toolbox", "A dusty metal toolbox.", items=[self.bolts, self.nuts, self.screwdriver]))
+        self.map["Woods - Logging Camp"].add_container(Container("Wooden Box", "A simple wooden box.", items=[self.alyonka_chocolate, self.can_of_sprats]))
 
 
-        # Define common loot items for scavs
+        # Define common loot items for scavs (expanded)
         self.scav_common_loot = [
-            Item("Wrench", "A rusty wrench.", weight=1),
-            Item("Matches", "A box of matches.", weight=0.1),
-            Consumable("Chocolate Bar", "A sugary treat.", effect_type="stamina_restore", effect_value=10, weight=0.1),
-            Consumable("MRE", "Meal Ready-to-Eat.", effect_type="heal", effect_value=30, weight=0.8),
-            Consumable("Bandage", "Stops light bleeding.", effect_type="cure_bleeding", effect_value=0, weight=0.1)
+            self.wrench,
+            self.matches,
+            self.chocolate_bar,
+            self.mre,
+            self.bandage,
+            self.alyonka_chocolate,
+            self.can_of_sprats,
+            self.bolts,
+            self.nuts,
+            self.lighter,
+            self.broken_lcd,
         ]
-        # Define common weapons scavs might carry
+        # Define common weapons scavs might carry (expanded)
         self.scav_weapons = [
-            pistol, # Makarov PM
-            Weapon("MP-133 Shotgun", "A pump-action 12-gauge shotgun.", damage=30, weight=3, effective_range_type="very_short"),
-            Weapon("SKS", "A semi-automatic 7.62x39mm carbine.", damage=28, weight=3.8, effective_range_type="medium"),
-            Weapon("Vepr KM", "A civilian AK variant.", damage=32, weight=4.2, effective_range_type="medium")
+            self.pistol,
+            self.mp5,
+            self.akm,
+            self.ak74n,
+            self.shotgun,
+            self.mosin,
+            self.toz_106,
+            self.vpo_209,
+            self.tt_pistol,
+            self.pm_silenced
         ]
-        # Define common armor/helmets scavs might wear
+        # Define common armor/helmets scavs might wear (expanded)
         self.scav_armor_pieces = [
-            paca_armor,
-            Armor("6B23-1 Armor", "Standard issue body armor.", defense=8, slot="body", weight=7),
+            self.paca_armor,
+            self.kirasa_armor,
+            self.tarbank_armor,
             None # Chance for no body armor
         ]
         self.scav_helmets = [
-            ssh68_helmet,
-            kolpak_helmet,
-            Armor("Comtacs", "Tactical headset.", defense=1, slot="head", weight=0.5), # Low defense "helmet"
+            self.ssh68_helmet,
+            self.kolpak_helmet,
+            self.un_helmet,
+            self.beanie,
             None # Chance for no helmet
         ]
 
-        # Define better gear for armored scavs
-        self.armored_scav_weapons = [ak74n, akm, mp5, shotgun, mosin]
-        self.armored_scav_armor = [kirasa_armor, gen4_armor]
-        self.armored_scav_helmets = [kolpak_helmet, altyn_helmet, ssh68_helmet] # Higher chance for better helmets
+        # Define better gear for armored scavs (expanded)
+        self.armored_scav_weapons = [self.ak74n, self.akm, self.mp5, self.shotgun, self.mosin, self.svd, self.m4a1] # Added m4a1 here
+        self.armored_scav_armor = [self.kirasa_armor, self.gen4_armor]
+        self.armored_scav_helmets = [self.kolpak_helmet, self.altyn_helmet, self.ssh68_helmet]
 
 
-        # Initial enemy spawns (some fixed, some random)
-        # Killa
-        killa_weapon = m4a1 # Example weapon for Killa
-        killa_armor = gen4_armor
-        killa_helmet = altyn_helmet
-        self.map["Resort"].add_enemy(Enemy("Killa", 200, 40, 0, # Base defense 0, armor adds
-                                            loot_items=[altyn_helmet, gen4_armor, m4a1, grizzly_medkit],
-                                            equipped_weapon=killa_weapon, equipped_armor=killa_armor, equipped_helmet=killa_helmet,
-                                            base_hit_chance=0.85)) # Killa is accurate
-
-        # Glukhar
-        glukhar_weapon = svd # Example weapon for Glukhar
-        glukhar_armor = gen4_armor
-        glukhar_helmet = altyn_helmet # Glukhar could have a different helmet, or none. Let's give him Altyn for now.
-        self.map["Military Base"].add_enemy(Enemy("Glukhar", 250, 45, 0, # Base defense 0, armor adds
-                                            loot_items=[svd, gen4_armor, akm, grizzly_medkit, Item("Keycard", "A valuable keycard.", weight=0.05)],
-                                            equipped_weapon=glukhar_weapon, equipped_armor=glukhar_armor, equipped_helmet=glukhar_helmet,
-                                            base_hit_chance=0.90)) # Glukhar is very accurate
-
-        # Other fixed enemies - ensure they also have equipped gear
-        self.map["Dormitories"].add_enemy(Enemy("Scav Raider", 80, 20, 0, loot_items=[ak74n, medkit, painkillers],
-                                            equipped_weapon=ak74n, equipped_armor=kirasa_armor, equipped_helmet=kolpak_helmet,
-                                            base_hit_chance=0.75)) # Scav Raider is also accurate
-        self.map["Factory Gate"].add_enemy(Enemy("Heavy Scav", 120, 25, 0, loot_items=[shotgun, kirasa_armor],
-                                            equipped_weapon=shotgun, equipped_armor=gen4_armor, equipped_helmet=ssh68_helmet,
-                                            base_hit_chance=0.70))
-        self.map["Power Station"].add_enemy(Enemy("Cultist", 150, 35, 0, loot_items=[gen4_armor, mosin, esmarch],
-                                            equipped_weapon=mosin, equipped_armor=kirasa_armor, equipped_helmet=None,
-                                            base_hit_chance=0.80)) # Cultists are stealthy and precise
-
+        # No fixed enemy spawns here. All enemies will be spawned randomly.
         self._spawn_random_enemies()
 
     def _spawn_random_enemies(self):
@@ -664,16 +853,45 @@ class Game:
             if not location.enemies and not location.is_extraction_point:
                 # Higher chance in unvisited, moderate chance in visited
                 spawn_chance = 0.4 if not location.visited else 0.15
+                
+                # Increase spawn chance slightly for more populated areas like Dorms, Factory, Resort
+                if "Dormitories" in loc_name or "Factory" in loc_name or "Resort" in loc_name or "Military Base" in loc_name:
+                    spawn_chance += 0.2
+
                 if random.random() < spawn_chance:
-                    num_scavs = random.randint(1, 2)
+                    num_scavs = random.randint(1, 3) # Up to 3 scavs
                     for _ in range(num_scavs):
                         # Determine enemy type and gear
-                        if random.random() < 0.25: # 25% chance for an Armored Scav
+                        enemy_type_roll = random.random()
+                        if enemy_type_roll < 0.15: # 15% chance for a heavily armored enemy (like a "Boss Guard")
+                            enemy_name = random.choice(["Heavy Guard", "Elite Scav"])
+                            enemy_health = random.randint(150, 250)
+                            enemy_damage = random.randint(30, 45)
+                            enemy_defense = 0 # Base defense, armor adds
+                            enemy_base_hit_chance = 0.80
+
+                            enemy_loot = random.sample(self.scav_common_loot, random.randint(2, 4))
+                            # Corrected: Referencing self.svd and self.m4a1 directly
+                            equipped_weapon = random.choice(self.armored_scav_weapons + [self.svd, self.m4a1]) # Higher tier weapons
+                            enemy_loot.append(equipped_weapon)
+                            
+                            equipped_armor = random.choice([self.gen4_armor, self.kirasa_armor])
+                            equipped_helmet = random.choice([self.altyn_helmet, self.kolpak_helmet])
+
+                            new_enemy = Enemy(enemy_name, enemy_health, enemy_damage, enemy_defense, 
+                                              loot_items=enemy_loot, equipped_weapon=equipped_weapon,
+                                              equipped_armor=equipped_armor, equipped_helmet=equipped_helmet,
+                                              base_hit_chance=enemy_base_hit_chance)
+                            location.add_enemy(new_enemy)
+                            if location == self.current_location:
+                                print(f"A {Colors.RED}{enemy_name}{Colors.RESET} lurks nearby...")
+                                spawned_in_current_location = True
+                        elif enemy_type_roll < 0.40: # 25% chance for an Armored Scav
                             enemy_name = "Armored Scav"
-                            enemy_health = random.randint(70, 90)
-                            enemy_damage = random.randint(18, 22)
+                            enemy_health = random.randint(70, 120)
+                            enemy_damage = random.randint(18, 25)
                             enemy_defense = 0 # Base defense, armor will add to this
-                            enemy_base_hit_chance = 0.45 # Decreased for random enemies
+                            enemy_base_hit_chance = 0.55 # Increased slightly for more challenge
 
                             # Armored Scav specific loot
                             enemy_loot = random.sample(self.scav_common_loot, random.randint(1, 3))
@@ -690,12 +908,12 @@ class Game:
                                               base_hit_chance=enemy_base_hit_chance)
                             location.add_enemy(new_enemy)
                             if location == self.current_location:
-                                print(f"An {enemy_name} lurks nearby...")
+                                print(f"An {Colors.RED}{enemy_name}{Colors.RESET} lurks nearby...")
                                 spawned_in_current_location = True
-                        else: # Regular Scav
+                        else: # Regular Scav (60% chance)
                             enemy_name = "Scav"
-                            enemy_health = random.randint(40, 60)
-                            enemy_damage = random.randint(10, 15)
+                            enemy_health = random.randint(40, 70)
+                            enemy_damage = random.randint(10, 18)
                             enemy_defense = 0 # Base defense, armor will add to this
                             enemy_base_hit_chance = 0.45 # Decreased for random enemies
 
@@ -713,7 +931,7 @@ class Game:
                                               base_hit_chance=enemy_base_hit_chance)
                             location.add_enemy(new_enemy)
                             if location == self.current_location:
-                                print(f"A {enemy_name} lurks nearby...")
+                                print(f"A {Colors.RED}{enemy_name}{Colors.RESET} lurks nearby...")
                                 spawned_in_current_location = True
         if spawned_in_current_location:
             print("You hear movement nearby...")
@@ -738,7 +956,7 @@ class Game:
         if self.current_location.enemies:
             print("\nEnemies present:")
             for enemy in self.current_location.enemies:
-                print(f"- {enemy.name}") # Only show name, condition revealed in combat if close
+                print(f"- {Colors.RED}{enemy.name}{Colors.RESET}") # Only show name, condition revealed in combat if close
         else:
             print("\nNo enemies detected.")
 
@@ -883,7 +1101,7 @@ class Game:
         if self.player.is_bleeding:
             bleeding_damage = random.randint(2, 5)
             self.player.take_damage(bleeding_damage, hit_location="body") # Bleeding is body damage
-            print(f"You are bleeding, taking {bleeding_damage} damage. Current HP: {self.player.current_health}/{self.player.max_health}")
+            print(f"You are bleeding, taking {bleeding_damage} damage. Your Health: {self.player._get_health_status()}")
 
 
     def display_help(self):
@@ -998,7 +1216,7 @@ class Game:
 
         if found_item:
             print(f"\n--- Examining {found_item.name} ---")
-            print(found_item.get_info())
+            print(found_item.get_info()) # Calls the modified get_info for Weapon/Armor
             print("-----------------------------")
         else:
             print(f"You don't have '{item_name_input}' to examine, or your input was ambiguous.")
@@ -1059,7 +1277,7 @@ class Game:
             print("You need to equip a weapon to attack!")
             return
 
-        print(f"\n--- Combat initiated with {target_enemy.name}! ---")
+        print(f"\n--- Combat initiated with {Colors.RED}{target_enemy.name}{Colors.RESET}! ---")
         combat_fled = False # Flag to check if player fled
         while self.player.is_alive and target_enemy.is_alive:
             combat_fled = self.combat_round(target_enemy)
@@ -1070,7 +1288,7 @@ class Game:
                 print("You have been killed in action. Raid failed!")
                 break
             if not target_enemy.is_alive:
-                print(f"{target_enemy.name} has been neutralized!")
+                print(f"{Colors.RED}{target_enemy.name}{Colors.RESET} has been neutralized!")
                 self.current_location.remove_enemy(target_enemy)
                 self._handle_enemy_loot(target_enemy)
                 break
@@ -1081,22 +1299,13 @@ class Game:
 
     def combat_round(self, enemy):
         """Handles a single round of combat."""
-        # Display exits during combat
-        print("\n--- Available Exits ---")
-        if not self.current_location.exits:
-            print("No immediate exits from this combat zone.")
-        else:
-            for direction, location in self.current_location.exits.items():
-                print(f"- {direction.capitalize()} to {location.name}")
-        print("-----------------------")
-
         # Player's turn
         print("\n--- Your Turn ---")
         action_choice = ""
-        # Removed "attack" from valid_combat_choices
         valid_combat_choices = ["head", "body", "flee"] 
         while True:
-            player_input = input("Choose your action (head/body/flee)? ").lower().strip()
+            # Display health status in-line with the prompt
+            player_input = input(f"Choose your action (head/body/flee)? [{self.player._get_health_status()}] ").lower().strip()
             
             # Fuzzy match for combat actions
             matching_choices = [choice for choice in valid_combat_choices if choice.startswith(player_input)]
@@ -1165,14 +1374,14 @@ class Game:
                     print(f"You aimed for the head but hit the body instead!")
                 player_hit = True
             else:
-                print(f"You aimed for the head but missed {enemy.name} entirely!")
+                print(f"You aimed for the head but missed {Colors.RED}{enemy.name}{Colors.RESET} entirely!")
         else: # Aiming for body
             if random.random() < final_hit_chance:
                 actual_hit_location = "body"
                 print(f"You aimed for the body and hit the body!")
                 player_hit = True
             else:
-                print(f"You aimed for the body but missed {enemy.name} entirely!")
+                print(f"You aimed for the body but missed {Colors.RED}{enemy.name}{Colors.RESET} entirely!")
 
         if player_hit:
             player_damage_for_enemy = player_damage
@@ -1181,13 +1390,13 @@ class Game:
                 print("Critical hit! Headshot!")
             
             actual_damage_dealt = enemy.take_damage(player_damage_for_enemy, hit_location=actual_hit_location) # Pass hit_location to enemy
-            print(f"You attack {enemy.name} with your {self.player.equipped_weapon.name}, dealing {actual_damage_dealt} damage.")
+            print(f"You attack {Colors.RED}{enemy.name}{Colors.RESET} with your {self.player.equipped_weapon.name}, and hit!") # Removed damage number
             
             # Display enemy condition only if combat is at close range
             if current_location_range == "close":
-                print(f"{enemy.name} (Condition: {enemy.get_condition()})")
+                print(f"{Colors.RED}{enemy.name}{Colors.RESET} (Condition: {enemy.get_condition()})")
             else:
-                print(f"{enemy.name} is at {current_location_range} range. You can't tell their exact condition.")
+                print(f"{Colors.RED}{enemy.name}{Colors.RESET} is at {current_location_range} range. You can't tell their exact condition.")
 
             if not enemy.is_alive:
                 return False # Enemy defeated, combat ends
@@ -1214,20 +1423,22 @@ class Game:
 
         # Enemy miss chance
         if random.random() > enemy_final_hit_chance:
-            print(f"{enemy.name} attacks you but misses!")
+            print(f"{Colors.RED}{enemy.name}{Colors.RESET} attacks you but misses!")
+            # Display player's current health status after enemy's turn (even on miss)
+            print(f"Your Health: {self.player._get_health_status()}")
             return False # Enemy misses, combat continues
 
         # If enemy hits, determine specific hit location based on their aim
         if enemy_aim_target == "head":
             if random.random() < 0.3: # 30% chance for enemy to hit head if aiming there
                 actual_enemy_hit_location = "head"
-                print(f"{enemy.name} aims for your head and hits!")
+                print(f"{Colors.RED}{enemy.name}{Colors.RESET} aims for your head and hits!")
             else:
                 actual_enemy_hit_location = "body"
-                print(f"{enemy.name} aims for your head but hits your body instead!")
+                print(f"{Colors.RED}{enemy.name}{Colors.RESET} aims for your head but hits your body instead!")
         else: # Enemy aims for body
             actual_enemy_hit_location = "body"
-            print(f"{enemy.name} aims for your body and hits!")
+            print(f"{Colors.RED}{enemy.name}{Colors.RESET} aims for your body and hits!")
 
         enemy_damage_to_player = enemy_damage
         if actual_enemy_hit_location == "head":
@@ -1235,13 +1446,24 @@ class Game:
             print("Critical hit! Headshot!")
 
         actual_damage_taken = self.player.take_damage(enemy_damage_to_player, hit_location=actual_enemy_hit_location) # Pass hit_location to player
-        print(f"{enemy.name} attacks you, dealing {actual_damage_taken} damage. Your HP: {self.player.current_health}/{self.player.max_health}")
+        print(f"{Colors.RED}{enemy.name}{Colors.RESET} attacks you, dealing {actual_damage_taken} damage.")
+        # Display player's current health status after enemy's turn
+        print(f"Your Health: {self.player._get_health_status()}")
         self.player.restore_stamina(5) # Passive stamina regen
         return False # Combat continues
 
     def _attempt_flee(self, enemy):
         """Attempts to flee from combat."""
         print("\n--- Attempting to Flee ---")
+        # Display exits during combat only when fleeing
+        print("\n--- Available Exits ---")
+        if not self.current_location.exits:
+            print("No immediate exits from this combat zone.")
+        else:
+            for direction, location in self.current_location.exits.items():
+                print(f"- {direction.capitalize()} to {location.name}")
+        print("-----------------------")
+
         flee_direction = ""
         
         # Fuzzy match for flee direction
@@ -1276,7 +1498,7 @@ class Game:
         else:
             print("Your escape attempt failed! You couldn't get away.")
             # Enemy gets an immediate extra attack if flee fails
-            print(f"--- {enemy.name}'s Counter Attack! ---")
+            print(f"--- {Colors.RED}{enemy.name}{Colors.RESET}'s Counter Attack! ---")
             enemy_damage = enemy.damage + random.randint(-3, 3)
             enemy_final_hit_chance = enemy.base_hit_chance # No range modifier for counter attack
             
@@ -1287,16 +1509,20 @@ class Game:
                     enemy_damage_to_player = int(enemy_damage_to_player * 2)
                     print("Critical hit! Headshot!")
                 actual_damage_taken = self.player.take_damage(enemy_damage_to_player, hit_location=hit_location)
-                print(f"{enemy.name} lands a hit on you, dealing {actual_damage_taken} damage. Your HP: {self.player.current_health}/{self.player.max_health}")
+                print(f"{Colors.RED}{enemy.name}{Colors.RESET} lands a hit on you, dealing {actual_damage_taken} damage.")
+                # Display player's current health status after counter attack
+                print(f"Your Health: {self.player._get_health_status()}")
             else:
-                print(f"{enemy.name} tries to hit you but misses!")
+                print(f"{Colors.RED}{enemy.name}{Colors.RESET} tries to hit you but misses!")
+                # Display player's current health status after counter attack (even on miss)
+                print(f"Your Health: {self.player._get_health_status()}")
             
             self.player.restore_stamina(5) # Passive stamina regen
             return False # Flee failed, combat continues
 
     def _handle_enemy_loot(self, enemy):
         """Adds enemy's loot to the current location."""
-        print(f"{enemy.name} dropped some loot:")
+        print(f"{Colors.RED}{enemy.name}{Colors.RESET} dropped some loot:")
         
         # Add equipped gear to loot
         if enemy.equipped_weapon:
@@ -1316,7 +1542,7 @@ class Game:
                 print(f"- {item.name}")
         
         if not enemy.equipped_weapon and not enemy.equipped_armor and not enemy.equipped_helmet and not enemy.loot_items:
-            print(f"{enemy.name} dropped nothing of value.")
+            print(f"{Colors.RED}{enemy.name}{Colors.RESET} dropped nothing of value.")
 
     def check_extraction(self):
         """Checks if the player is at an extraction point and can extract."""
@@ -1332,7 +1558,7 @@ class Game:
 
     def run(self):
         """Main game loop."""
-        print("Welcome to Escape from Tarkov: Text-Based MUD!")
+        print("Welcome to Textract: Text-Based MUD!")
         print("Type 'help' for a list of commands.")
         self.display_location()
 
